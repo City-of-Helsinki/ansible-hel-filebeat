@@ -1,47 +1,25 @@
 ---
-- name: Install prereq. pkg
-  apt:
-    name:
-      - apt-transport-https
-    state: present
-    force_apt_get: "{{ apt_force_apt_get }}"
-    install_recommends: "{{ apt_install_recommends }}"
-  tags: [ packages, filebeat ]
-
-- name: Add ElasticSearch repo key
-  apt_key:
-    url: "{{ es_apt_key }}"
-    state: present
+- name: Install Elasticsearch repository
+  become: yes
   tags: [ repository, filebeat ]
+  block:
+  - name: Debian - Install apt-transport-https to support https APT downloads
+    apt:
+      name: apt-transport-https
+      state: present
 
-- name: Add ElasticSearch repository
-  apt_repository:
-    repo: "{{ es_apt_url }}"
-    state: present
-  tags: [ repository, filebeat ]
+  - name: Debian - Add Elasticsearch repository key
+    apt_key:
+      url: '{{ es_apt_key }}'
+      state: present
+    when: es_apt_key | string
 
-- name: Filebeat | Apt pinning for pkgs
-  template:
-    src: "etc/apt/pin-package.j2"
-    dest: "/etc/apt/preferences.d/{{ item.name }}"
-    owner: root
-    group: root
-    mode: 0644
-  loop: "{{ es_pinning_pkgs }}"
-  register: apt_pinning_status
-  when:
-    - es_pinning_pkgs is defined
-    - es_enable_pinning | bool
-  tags: [ repository, filebeat, apt ]
-
-- name: Update apt cache
-  apt:
-    update_cache: yes
-  when:
-    - es_pinning_pkgs is defined
-    - es_enable_pinning | bool
-    - apt_pinning_status is changed
-  tags: [ packages, filebeat, apt ]
+  - name: Debian - Add Elasticsearch repository
+    apt_repository:
+      repo: '{{ item.repo }}'
+      state: '{{ item.state }}'
+    with_items:
+      - { repo: "{{ es_apt_url }}", state: "present" }
 
 - name: Install Filebeat package
   apt:
@@ -58,6 +36,7 @@
     owner: root
     group: root
   tags: [ config, filebeat ]
+  when: es_filebeat_inputs|length > 0
 
 - name: Create main Filebeat config
   template:
@@ -81,7 +60,7 @@
   notify: restart filebeat
   tags: [ config, filebeat ]
 
-- name: Configure Filebeats modules from templates
+- name: Configure Filebeat modules from templates
   template:
     src: "modules/{{ item.name }}.yml.j2"
     dest: "/etc/filebeat/modules.d/{{ item.name }}.yml"
@@ -93,28 +72,15 @@
   notify: restart filebeat
   tags: [ config, filebeat ]
 
-- name: Filebeats enable modules from cli  # noqa 305
-  shell: filebeat modules enable {{ item.name }}
+- name: Set state of modules using filebeat CLI
+  shell: filebeat modules {{ 'enable' if item.enabled else 'disable' }} {{ item.name }}
   args:
     creates: "/etc/filebeat/modules.d/{{ item.name }}.yml"
-  loop: "{{ es_filebeat_modules_cli }}"
+  loop: "{{ es_filebeat_modules }}"
   when: item.enabled
   tags: [ config, filebeat ]
 
-- name: Filebeats disable modules from cli  # noqa 305
-  shell: filebeat modules disable {{ item.name|quote }}
-  args:
-    creates: "/etc/filebeat/modules.d/{{ item.name }}.yml.disabled"
-  loop: "{{ es_filebeat_modules_cli }}"
-  when: not item.enabled
-  tags: [ config, filebeat ]
-
-- name: Enable and start Filebeat service
-  service:
-    name: filebeat
-    enabled: yes
-    state: started
-  tags: [ filebeat ]
+- import_tasks: service-Debian.yml
 
 - name: Pause before next server
   pause:

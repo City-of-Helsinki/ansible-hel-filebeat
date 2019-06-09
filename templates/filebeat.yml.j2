@@ -1,37 +1,33 @@
 ---
-filebeat.inputs:
-- type: log
+####### Filebeat configuration for {{ ansible_host }} ######
 
-  # Change to true to enable this input configuration.
-  enabled: false
+# You can find the full configuration reference here:
+# https://www.elastic.co/guide/en/beats/filebeat/index.html
 
-  # Paths that should be crawled and fetched. Glob based paths.
-  paths:
-    - /var/log/*.log
-    #- c:\programdata\elasticsearch\logs\*
+# For more available modules and options, please see the filebeat.reference.yml sample
+# configuration file.
+
+# Both the modules and inputs below make use of the external config file support:
+# https://www.elastic.co/guide/en/beats/filebeat/current/filebeat-configuration-reloading.html
+
+#============================= Filebeat modules ===============================
+filebeat.config.modules:
+  enabled: {{ es_filebeat_enable_modules }}
+  # Glob pattern for configuration loading
+  path: ${path.config}/modules.d/*.yml
+  # When set to true, enables dynamic config reload.
+  reload.enabled: true
+  # Specifies how often the files are checked for changes.
+  reload.period: 30s
 
 #============================= Filebeat inputs ================================
 filebeat.config.inputs:
-    enabled: true
-    path: inputs.d/*.yml
-    reload.enabled: true
-    reload.period: 30s
-
-#============================= Filebeat modules ===============================
-
-filebeat.config.modules:
-  # Glob pattern for configuration loading
-  path: ${path.config}/modules.d/*.yml
-
-  # Set to true to enable config reloading
+  enabled: {{ es_filebeat_enable_inputs }}
+  path: ${path.config}/inputs.d/*.yml
   reload.enabled: true
-
-  # Period on which files under path should be checked for changes
   reload.period: 30s
-
 {% if es_filebeat_docker %}
-#============================= autodiscovery docker containers ===============
-
+#======================= Autodiscover docker containers =======================
 filebeat.autodiscover:
   providers:
     - type: docker
@@ -47,18 +43,14 @@ filebeat.autodiscover:
       json.ignore_decoding_error: true
       processors:
         - add_docker_metadata: ~
-
 {% endif %}
 #================================ General =====================================
-
 # The name of the shipper that publishes the network data. It can be used to group
 # all the transactions sent by a single shipper in the web interface.
 #name:
-
+{% if es_filebeat_main_tags %}
 # The tags of the shipper are included in their own field with each
 # transaction published.
-#tags: ["service-X", "web-tier"]
-{% if es_filebeat_main_tags %}
 tags:
 {% for tag in es_filebeat_main_tags %}
   - {{ tag }}
@@ -71,14 +63,39 @@ tags:
 #  env: staging
 
 #============================== Dashboards =====================================
+# These settings control loading the sample dashboards to the Kibana index. Loading
+# the dashboards is disabled by default and can be enabled either by setting the
+# options here or by using the `setup` command.
 #setup.dashboards.enabled: false
+
+# The URL from where to download the dashboards archive. By default this URL
+# has a value which is computed based on the Beat name and version. For released
+# versions, this URL points to the dashboard archive on the artifacts.elastic.co
+# website.
 #setup.dashboards.url:
 
 #============================== Kibana =====================================
+# Starting with Beats version 6.0.0, the dashboards are loaded via the Kibana API.
+# This requires a Kibana endpoint configuration.
 setup.kibana:
-  #host: "localhost:5601"
-  #space.id:
+  {% if es_kibana_username is defined %}
+  # HTTP basic username and password for Kibana API
+  username: {{ es_kibana_username }}
+  password: {{ es_kibana_password }}
+  {% endif %}
 
+  # Kibana Host
+  # Scheme and port can be left out and will be set to the default (http and 5601)
+  # In case you specify and additional path, the scheme is required: http://localhost:5601/path
+  # IPv6 addresses should always be defined as: https://[2001:db8::1]:5601
+  {% if es_kibana_host is defined %}
+  host: {{ es_kibana_host_uri }}
+  {% endif %}
+
+  # Kibana Space ID
+  # ID of the Kibana Space into which the dashboards should be loaded. By default,
+  # the Default Space will be used.
+  #space.id:
 #============================= Elastic Cloud ==================================
 # The cloud.id setting overwrites the `output.elasticsearch.hosts` and
 # `setup.kibana.host` options.
@@ -91,26 +108,42 @@ setup.kibana:
 
 #================================ Outputs =====================================
 
-# Configure what output to use when sending the data collected by the beat.
+# Outputs write the collected events to their destinations
 
 #-------------------------- Elasticsearch output ------------------------------
-#output.elasticsearch:
+{% if es_filebeat_es_hosts %}
+output.elasticsearch:
   # Array of hosts to connect to.
+  hosts:
+{% for host in es_filebeat_es_hosts %}
+    - {{ host }}
+{% endfor %}
+{% else %}
+#output.elasticsearch:
   #hosts: ["localhost:9200"]
-
   # Optional protocol and basic auth credentials.
   #protocol: "https"
   #username: "elastic"
   #password: "changeme"
-
+{% endif %}
 #----------------------------- Logstash output --------------------------------
+{% if es_filebeat_logstash_urls %}
 output.logstash:
   # The Logstash hosts
-  hosts: [ {% for ls_host in es_filebeat_logstash_hosts %}"{{ ls_host }}:{{ es_filebeat_logstash_port }}"{{ ',' if not loop.last else '' }}{% endfor %} ]
+  hosts:
+{% for ls_url in es_filebeat_logstash_urls %}
+    - {{ ls_url }}
+{% endfor %}
+
   ttl: 30
   pipelining: 0
+{% else %}
+#output.logstash:
+  # The Logstash hosts
+  #hosts: ["localhost:5044"]
+{% endif %}
 
-  # Optional SSL. By default is off.
+  # Optional SSL, off by default.
   # List of root certificates for HTTPS server verifications
   #ssl.certificate_authorities: ["/etc/pki/root/ca.pem"]
 
@@ -120,7 +153,7 @@ output.logstash:
   # Client Certificate Key
   #ssl.key: "/etc/pki/client/cert.key"
 
-#================================ Procesors =====================================
+#================================ Processores =================================
 
 # Configure processors to enhance or manipulate events generated by the beat.
 
@@ -133,14 +166,11 @@ processors:
 # Sets log level. The default log level is info.
 # Available log levels are: error, warning, info, debug
 logging.level: info
-logging.metrics.enabled: false
 
 # At debug level, you can selectively enable logging only for some components.
 # To enable all selectors use ["*"]. Examples of other selectors are "beat",
 # "publish", "service".
 #logging.selectors: ["*"]
-
-max_procs: 1
 
 #============================== Xpack Monitoring ===============================
 # filebeat can export internal metrics to a central Elasticsearch monitoring
@@ -157,5 +187,11 @@ xpack.monitoring.enabled: {{ es_filebeat_monitoring }}
 # following line.
 {% if es_filebeat_monitoring %}
 xpack.monitoring.elasticsearch.hosts: "http://{{ es_elastic_coordination }}:9200/"
+{% else %}
+#monitoring.elasticsearch:
 {% endif %}
 
+#================================= Migration ==================================
+
+# This allows to enable 6.7 migration aliases
+#migration.6_to_7.enabled: true

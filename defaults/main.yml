@@ -1,36 +1,53 @@
 ---
 es_apt_key: "https://artifacts.elastic.co/GPG-KEY-elasticsearch"
 es_apt_url: "deb https://artifacts.elastic.co/packages/{{ es_major_version }}/apt stable main"
-es_major_version: 6.x
-es_filebeat_version: '6.8.*'
-es_enable_pinning: true
-es_pinning_pkgs:
-  - { name: 'filebeat', version: '{{ es_filebeat_version }}', priority: 1000 }
+es_filebeat_version: '7.1.*'
+es_major_version: "{{ es_filebeat_version.split('.')[0] }}.x"
 
-es_filebeat_logstash_hosts:
-  - localhost
-es_filebeat_logstash_port: 5044
+# Template is written using filebeat.output syntax, thus
+# only one output is supported.
+es_filebeat_logstash_urls: []
+#  - localhost:5044
 
-es_filebeat_inputs:
-  - name: filebeat
+es_filebeat_es_urls: []
+#  - localhost:9200
+
+# Whether to send monitor data for filebeat to the ES
+# Not available in ES OSS distribution (maybe AWS)
+# Avaiable with the no-cost Basic license though.
+es_filebeat_monitoring: false
+
+# Master switch enabling / disabling inputs configured
+# by es_filebeat_inputs
+es_filebeat_enable_inputs: false
+
+# Inputs are configured using small config fragments from templates/input.
+# This setting specifies which of those fragments
+# are copied to the host running filebeat. Note that this role
+# does not clean up existing fragments.
+es_filebeat_inputs: []
+#  - name: filebeat
 #  - name: ceph
 #  - name: openstack
 #  - name: libvirt
 #  - name: impstats
 
+# Add timezone information to log entries for supporting modules
+# without this the pipelines assume all timestamps in logs are in UTC
+es_filebeat_timezone_conversion: true
+
+# Master switch enabling / disabling modules configured
+# by es_filebeat_modules
+es_filebeat_enable_modules: false
+
+# Modules are configured using small config fragments from templates/modules
+# This settings specifies which of those fragments are copied to the host
+# running filebeat. Note that this role does not cleanup existing fragments.
+# Each copied module definition can be individually enabled/disabled
 es_filebeat_modules: []
-#  - system
-#  - elasticsearch
-#  - kafka
-#  - logstash
-#  - haproxy
-#  - kibana
-es_filebeat_modules_cli: []
 # - name: system
 #   enabled: true
-es_filebeat_create_webbeats_template: false
 
-es_filebeat_monitoring: false
 es_filebeat_docker: false
 es_filebeat_main_tags: []
 
@@ -38,5 +55,4 @@ es_filebeat_pause_sec: 1
 es_filebeat_pause_min: 0
 
 ## APT
-apt_force_apt_get: yes
-apt_install_recommends: no
+apt_install_recommends: yes
