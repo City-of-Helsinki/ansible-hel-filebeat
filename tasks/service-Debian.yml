@@ -1,0 +1,21 @@
+- name: Ensure service override directory exists
+  file:
+    path: /etc/systemd/system/filebeat.service.d
+    state: directory
+    mode: 0775
+
+# Do not log to journal, see comment in file
+- name: Ensure logging override file is in place
+  copy:
+    src: "files/disable-stderr-logging.conf"
+    dest: "/etc/systemd/system/filebeat.service.d"
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Enable and start Filebeat service
+  service:
+    name: filebeat
+    enabled: yes
+    state: started
+  tags: [ filebeat ]
