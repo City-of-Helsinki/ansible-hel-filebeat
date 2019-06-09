@@ -1,55 +1,58 @@
-Role Name
+ansible-hel-filebeat
 =========
+Hello! This is a role for installing filebeat and using its modules
+framework the get the logs flowing with minimum of fuss.
 
-Install and setup filebeat.
+Modules in filebeat are prepackaged Filebeat configs & Elasticsearch
+ingest pipeline setups. This makes ELK stack simpler, if somewhat
+lackings in the L-department.
+
+This role installs your chosen filebeat version (default is 7.1.x) and
+enables your chosen modules. "system" is a good starting point, it ships out
+/var/log/syslog & /var/log/auth.log out to elasticsearch.
 
 Requirements
 ------------
-
+Elasticsearch installation (or their cloud offering)
+Ubuntu or Debian based server with logs to be shipped
 
 Role Variables
 --------------
 
 ```yaml
-es_filebeat_logstash_hosts:
-  - 'logstash.example.com'
-es_filebeat_logstash_port: 5444
-es_filebeat_main_tags:
-  - '{{ inventory_dir|basename }}'
-es_filebeat_inputs:
-  - name: filebeat
-  - name: openstack
-  - name: ceph
-  - name: libvirt
+es_filebeat_es_hosts:
+  - my.elk.server:9200
+es_filebeat_modules:
+  - name: module_i_want_to_use
+    enabled: toggle_for_enabling_disabling_the_module
 ```
 
-see in defaults/main.yaml
-
-If set monitoring to ES, you need to set up `es_elastic_coordination` variable.
-
-
-Dependencies
-------------
+see defaults/main.yaml
 
 
 Example Playbook
 ----------------
 
-Including an example of how to use your role (for instance, with variables passed in as parameters) is always nice for users too:
+Install filebeat, have it send the system logs to Elasticsearch:
 
 ```yaml
-    - hosts: servers
-      roles:
-         - role: filebeat
+  - hosts: all
+    vars:
+      es_filebeat_es_hosts:
+        - my.elk.server:9200
+      es_filebeat_modules:
+        - name: system
+          enabled: true
+    roles:
+      - role: ansible-hel-filebeat
 ```
 
 License
 -------
-
-BSD
+MIT
 
 Author Information
 ------------------
+Ville Koivunen @ hel.fi
 
-Tomasz <bul> Baczyński
-Michał <warf> Łuczak
+based on roles elastic.elasticsearch & tbaczynski.filebeat
